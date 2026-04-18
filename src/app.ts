@@ -9,6 +9,7 @@ import { postRoutes } from './routes/postRoutes';
 import { userRoutes } from './routes/userRoutes';
 import { swaggerSpec } from './swagger';
 import { ApiError } from './types';
+import { logger } from './utils/logger';
 
 const app = express();
 
@@ -17,8 +18,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
-// Routes
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
 	res.json({
 		status: 'OK',
 		timestamp: new Date().toISOString(),
@@ -28,7 +28,7 @@ app.get('/health', (req: Request, res: Response) => {
 	});
 });
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
 	res.json({
 		name: 'Simple Test API',
 		version: '1.0.0',
@@ -64,8 +64,8 @@ app.get('/', (req: Request, res: Response) => {
 // Swagger UI
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/docs.json', (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
+	res.setHeader('Content-Type', 'application/json');
+	res.send(swaggerSpec);
 });
 
 // API Routes
@@ -74,40 +74,35 @@ app.use('/users', userRoutes);
 app.use('/posts', postRoutes);
 
 // Reset route
-app.post('/reset', async (req: Request, res: Response) => {
+app.post('/reset', async (_req: Request, res: Response) => {
 	try {
 		db.reset();
 		await db.initializeMockData();
-
+		logger.info('App', 'Data reset to mock defaults');
 		res.json({
 			message: 'Data reset successfully',
 			users: db.getUsers().length,
 			posts: db.getPosts().length,
 		});
-	} catch (error) {
-		res.status(500).json({
-			error: 'Internal server error',
-			message: 'Failed to reset data.',
-		});
+	} catch (error: any) {
+		logger.error('App', 'Failed to reset data', { error: error.message });
+		res.status(500).json({ error: 'Internal server error', message: 'Failed to reset data.' });
 	}
 });
 
 // Global error handler
-app.use((error: ApiError, req: Request, res: Response, next: NextFunction) => {
-	console.error('Global error handler:', error);
-
+app.use((error: ApiError, _req: Request, res: Response, _next: NextFunction) => {
+	logger.error('App', 'Unhandled error', { message: error.message, statusCode: error.statusCode, stack: error.stack });
 	res.status(error.statusCode || 500).json({
 		error: 'Internal server error',
-		message:
-			config.nodeEnv === 'development'
-				? error.message
-				: 'Something went wrong.',
+		message: config.nodeEnv === 'development' ? error.message : 'Something went wrong.',
 		...(config.nodeEnv === 'development' && { stack: error.stack }),
 	});
 });
 
 // Handle 404
 app.use('*', (req: Request, res: Response) => {
+	logger.warn('App', `Route not found: ${req.method} ${req.originalUrl}`);
 	res.status(404).json({
 		error: 'Not found',
 		message: `Route ${req.method} ${req.originalUrl} not found.`,

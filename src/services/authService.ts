@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { config } from '../config';
 import { db } from '../database';
 import jwt from 'jsonwebtoken';
+import { logger } from '../utils/logger';
 
 export class AuthService {
   async register(username: string, email: string, password: string) {
@@ -41,29 +42,24 @@ export class AuthService {
       };
     }
 
-    // Check if user exists
     const existingUser =
       db.findUserByUsernameOrEmail(username) ||
       db.findUserByUsernameOrEmail(email);
     if (existingUser) {
+      logger.warn('AuthService', 'Registration failed — username or email already taken', { username, email });
       throw { statusCode: 409, message: 'Username or email is already taken.' };
     }
 
-    // Hash password and create user
     const hashedPassword = await bcrypt.hash(password, config.saltRounds);
-    const newUser = db.createUser({
-      username,
-      email,
-      password: hashedPassword,
-    });
+    const newUser = db.createUser({ username, email, password: hashedPassword });
 
-    // Generate token
     const token = jwt.sign(
       { id: newUser.id, username: newUser.username },
       config.jwtSecret,
       { expiresIn: '24h' }
     );
 
+    logger.info('AuthService', 'User registered successfully', { userId: newUser.id, username, email });
     return { user: newUser, token };
   }
 
@@ -74,11 +70,13 @@ export class AuthService {
 
     const user = db.findUserByUsernameOrEmail(username);
     if (!user) {
+      logger.warn('AuthService', 'Login failed — user not found', { username });
       throw { statusCode: 401, message: 'Username or password is incorrect.' };
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      logger.warn('AuthService', 'Login failed — incorrect password', { username, userId: user.id });
       throw { statusCode: 401, message: 'Username or password is incorrect.' };
     }
 
@@ -88,6 +86,7 @@ export class AuthService {
       { expiresIn: '24h' }
     );
 
+    logger.info('AuthService', 'User logged in successfully', { userId: user.id, username });
     return { user, token };
   }
 }

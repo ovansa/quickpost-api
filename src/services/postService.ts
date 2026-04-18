@@ -1,5 +1,6 @@
 import { db } from '../database';
 import { Post } from '../types';
+import { logger } from '../utils/logger';
 
 export class PostService {
 	getPosts(page: number = 1, limit: number = 10, authorId?: number) {
@@ -47,11 +48,9 @@ export class PostService {
 			};
 		}
 
-		return db.createPost({
-			title: title.trim(),
-			content: content.trim(),
-			authorId,
-		});
+		const post = db.createPost({ title: title.trim(), content: content.trim(), authorId });
+		logger.info('PostService', 'Post created', { postId: post.id, authorId, title: post.title });
+		return post;
 	}
 
 	updatePost(id: number, title: string, content: string, userId: number): Post {
@@ -61,6 +60,7 @@ export class PostService {
 		}
 
 		if (post.authorId !== userId) {
+			logger.warn('PostService', 'Unauthorized post update attempt', { postId: id, userId, ownerId: post.authorId });
 			throw { statusCode: 403, message: 'You can only edit your own posts.' };
 		}
 
@@ -69,28 +69,21 @@ export class PostService {
 		}
 
 		if (title.length < 3) {
-			throw {
-				statusCode: 400,
-				message: 'Title must be at least 3 characters long.',
-			};
+			throw { statusCode: 400, message: 'Title must be at least 3 characters long.' };
 		}
 
 		if (content.length < 10) {
-			throw {
-				statusCode: 400,
-				message: 'Content must be at least 10 characters long.',
-			};
+			throw { statusCode: 400, message: 'Content must be at least 10 characters long.' };
 		}
 
-		const updatedPost = db.updatePost(id, {
-			title: title.trim(),
-			content: content.trim(),
-		});
+		const updatedPost = db.updatePost(id, { title: title.trim(), content: content.trim() });
 
 		if (!updatedPost) {
+			logger.error('PostService', 'Post update failed unexpectedly', { postId: id });
 			throw { statusCode: 500, message: 'Failed to update post.' };
 		}
 
+		logger.info('PostService', 'Post updated', { postId: id, userId, title: updatedPost.title });
 		return updatedPost;
 	}
 
@@ -101,14 +94,17 @@ export class PostService {
 		}
 
 		if (post.authorId !== userId) {
+			logger.warn('PostService', 'Unauthorized post delete attempt', { postId: id, userId, ownerId: post.authorId });
 			throw { statusCode: 403, message: 'You can only delete your own posts.' };
 		}
 
 		const success = db.deletePost(id);
 		if (!success) {
+			logger.error('PostService', 'Post delete failed unexpectedly', { postId: id });
 			throw { statusCode: 500, message: 'Failed to delete post.' };
 		}
 
+		logger.info('PostService', 'Post deleted', { postId: id, userId, title: post.title });
 		return { id: post.id, title: post.title };
 	}
 }
