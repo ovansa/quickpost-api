@@ -8,7 +8,8 @@
 		"build": "tsc",
 		"start": "node dist/server.js",
 		"start": "pnpm build && pm2 start ecosystem.config.js",
-		"restart": "git pull && pnpm install && pnpm build && pm2 reload ecosystem.config.js"
+		"restart": "git pull && pnpm install && pnpm build && pm2 reload ecosystem.config.js",
+		"logs": "pm2 logs quickpost-api"
 	},
 	"keywords": [],
 	"author": "",
