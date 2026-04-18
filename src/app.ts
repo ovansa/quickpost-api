@@ -1,11 +1,13 @@
 import cors from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
 import { db } from './database';
 import { requestLogger } from './middleware/logging';
 import { authRoutes } from './routes/authRoutes';
 import { postRoutes } from './routes/postRoutes';
 import { userRoutes } from './routes/userRoutes';
+import { swaggerSpec } from './swagger';
 import { ApiError } from './types';
 
 const app = express();
@@ -57,6 +59,13 @@ app.get('/', (req: Request, res: Response) => {
 			password: 'password123',
 		},
 	});
+});
+
+// Swagger UI
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/docs.json', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
 });
 
 // API Routes
